@@ -10,6 +10,9 @@ from numpy.random import randint
 import pickle
 
 class VideoDataset(data.Dataset):
+    """
+    Class for implementing the video dataset.
+    """
     def __init__(self, list_file, modality, image_tmpl,
                  num_frames_per_clip, dense_sampling,
                  sample_offset=0, num_clips=1,

@@ -1,13 +1,13 @@
 # This file may be used to create an environment using:
-# $ conda create --name <env> --file <this file>
+# conda create env <name>
+# pip install -r <this_file>
 # platform: linux-64
-numpy==1.19.1
+numpy
 pandas==1.1.1
 pillow==7.2.0
 protobuf==3.13.0
 python-dateutil==2.8.1
-torch==1.4.0 
-pytorch
+torch==1.6.0 
 pyyaml==5.3.1
 scikit-image==0.17.2
 scikit-learn==0.23.2
@@ -20,4 +20,3 @@ torchvision==0.7.0
 tornado==6.0.4
 tqdm==4.48.2
 wheel==0.35.1
-

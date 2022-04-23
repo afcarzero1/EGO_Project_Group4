@@ -2,7 +2,13 @@ from .video_record import VideoRecord
 
 
 class EpicVideoRecord(VideoRecord):
+    """
+    This is a class that inherits from VideoRecord . It implements some new methods and implements the abstract methods
+    defined in the parent class.
+    This class obtains all information about the video from the objects tup and rgb4e passed in the initializer.
+    """
     def __init__(self, tup, rgb4e):
+        #todo : add call to the super class
         self._index = str(tup[0])
         self._series = tup[1]
         self.rgb4e = rgb4e

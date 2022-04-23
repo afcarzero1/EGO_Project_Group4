@@ -1,5 +1,9 @@
 
 class VideoRecord(object):
+    """
+    VideoRecord is an abstract class to represent the video recordings. It contains a series
+    of methods (marked as properties) to be implemented in derived classes.
+    """
     def __init__(self, row):
         self._data = row
 
