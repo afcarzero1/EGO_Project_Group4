@@ -1,4 +1,7 @@
 import math
+
+import pandas as pd
+
 from .epic_record import EpicVideoRecord
 import torch.utils.data as data
 from PIL import Image
@@ -12,6 +15,18 @@ import pickle
 class VideoDataset(data.Dataset):
     """
     Class for implementing the video dataset.
+
+    Attributes
+    ----------
+    list_file : pd.DataFrame
+        Pandas DataFrame with annotations for the video dataset
+    num_clips : int
+        Number of clips to analyze
+    video_list : [EpicVideoRecord]
+        It is a list of EpicVideoRecords. Each of the elements contains information about a clip such as the kitchen
+        participant, start frame, etc...
+    :todo finish the documentation
+
     """
     def __init__(self, list_file, modality, image_tmpl,
                  num_frames_per_clip, dense_sampling,
@@ -19,17 +34,21 @@ class VideoDataset(data.Dataset):
                  fixed_offset=False,
                  visual_path=None, flow_path=None, event_path=None,
                  mode='train', transform=None, args=None):
+        """
+        Constructor for video dataset class.
+        """
 
+        # Get list of user environment variables.
         self.load_cineca_data = os.environ["HOME"].split("/")[-1] == "abottin1"
-        self.sync = args.sync
-        self.num_frames = num_frames_per_clip
+        self.sync = args.sync #Synchronization parameter todo: understand where it must be used
+        self.num_frames = num_frames_per_clip # Number of frames in a clip
         self.num_clips = num_clips
         self.resampling_rate= args.resampling_rate
         self.sample_offset = sample_offset
         self.fixed_offset = fixed_offset
         self.dense_sampling = dense_sampling
         self.audio_path = args.audio_path
-        self.audio_path = pickle.load(open(self.audio_path, 'rb'))
+        # self.audio_path = pickle.load(open(self.audio_path, 'rb')) # todo: uncomment this line
 
         self.modalities = modality  # considered modalities (ex. [RGB, Flow, Spec, Event])
         self.mode = mode  # 'train', 'val' or 'test'
@@ -40,13 +59,13 @@ class VideoDataset(data.Dataset):
         self.flow_path = flow_path
         self.visual_path = visual_path
         self.event_path = event_path
-        self.list_file = list_file  # all files paths taken from .pkl file
+        self.list_file : pd.DataFrame = list_file  # all files paths taken from .pkl file
 
         # data related
         self.num_clips = num_clips
         self.image_tmpl = image_tmpl  # filename format. (ex. 'img_{:010d}.jpg' for RGB)
         self.transform = transform  # pipeline of transforms
-
+        # List of EpicVideoRecord Instances
         self.video_list = [EpicVideoRecord(tup, self.args.rgb4e) for tup in self.list_file.iterrows()]
 
     def _sample_train(self, record, modality='RGB'):
@@ -68,13 +87,40 @@ class VideoDataset(data.Dataset):
         '''
         return segment_indices
 
-    def _get_val_indices(self, record, modality):
-        '''
-        TO BE COMPLETED!
-        '''
+    def _get_val_indices(self, record, modality) -> [int]:
+        r""" This is a private function for getting the indices for validation.
+        Arguments:
+            record (EpicVideoRecord) : This is the record for which we want to get the validation indices.
+            modality (str) : This is the modality of the experiment.
+        Returns:
+             indices ([int]) : List of indices.
+        FIXME : Complete this class. Now it does dummy stuff
+        """
+        indices: [] = []
+        starting_frame: int = record.start_frame
+        end_frame: int = record.end_frame
+        num_frames: int = self.num_frames[modality] # Rettrieve the number of frames to be sampled from the given modality.
+        dense_sampling: bool = self.dense_sampling # Check whether sampling is dense or not
+        if modality == 'RGB':
+            # Check if the sampling is dense
+            if dense_sampling:
+                # In case of dense sampling take a random point in the clip and take num_frames consecutive frames.
+                indices_start = np.random.randint(starting_frame,end_frame-num_frames)
+                indices = [idx for idx in range(indices_start,indices_start+num_frames)]
+            else:
+                # In case of not dense sampling take uniform distributed frames from the clip.
+                indices = np.random.randint(starting_frame,end_frame,num_frames).tolist()
+        elif modality == 'Flow':
+            #todo : write the code for this
+            indices = None
+
+        return indices
 
     def __getitem__(self, index):
-
+        """
+        This is the function to implement. It gives an item from the dataset
+        :param index This is the index from which we want to get the data.
+        """
         frames = {}
         label = None
         # record is a row of the pkl file containing one sample/action
@@ -113,6 +159,14 @@ class VideoDataset(data.Dataset):
 
 
     def get(self, modality, record, indices):
+        r""" Function for getting a set of records.
+        Arguments:
+            modality (str) : It is the modality used in the loader. It may be RGB or Flow or Event.
+            record (EpicVideoRecord) : It is the EpicVideorecord
+            indices ([int]) : List of indices of the videos to get FIXME: Is this correct?
+        Returns:
+            FIXME : What does this return?
+        """
         images = list()
         for frame_index in indices:
             p = int(frame_index)
@@ -123,6 +177,13 @@ class VideoDataset(data.Dataset):
         return process_data, record.label
 
     def _load_data(self, modality, record, idx):
+        r""" Private function for loading the data
+        Arguments:
+            modality (str) : It is the modality of the experiment
+            record (EpicVideoRecord) : The number of the record to retrieve
+            idx (int) : The index of the frame # FIXME : Verify this is really the index of the frame
+
+        """
 
         if modality == 'RGB' or modality == 'RGBDiff':
             idx_untrimmed = record.start_frame + idx

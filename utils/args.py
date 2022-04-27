@@ -34,9 +34,9 @@ parser.add_argument('--base_arch', type=str, nargs='+', default=['bninception', 
 
 # Num frames per segment is referred to the number of frames of the relative modality
 parser.add_argument('--num_frames_per_clip_train', type=int, nargs='+',
-                    help='number of frames per training segment correponding to each modality')
+                    help='number of frames per training segment corresponding to each modality')
 parser.add_argument('--num_frames_per_clip_test', type=int, nargs='+',
-                    help='number of frames per testing segment correponding to each modality')
+                    help='number of frames per testing segment corresponding to each modality')
 parser.add_argument('--num_clips_test', type=int, default=5,
                     help='number of clips per sample at test time')
 

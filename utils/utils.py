@@ -7,25 +7,32 @@ from models.I3D import I3D
 from models.TSN import TSN
 import platform
 
+
 def take_path(args):
-    print(platform.node())
+    """
+    Function for taking the path of the varios files used in the project
+    :param args : It is the arguments of the program (given by command line)
+    """
+    # Print the platform in which program is running
+    print(f"[GENERAL] The program is running on : {platform.node()}")
+
+    # Access the shift argument. (It is useful for domain adaptation)
     split = args.shift.split("-")
 
-    # Standard training
+    # Standard training. MOdify path depending on received arguments
     pkl_source = split[0] + "_train.pkl"
     args.train_list = "./train_val/" + pkl_source
     pkl_target = split[-1] + "_test.pkl"  # VAL
     args.val_list = "./train_val/" + pkl_target
 
     # MULTI SOURCES DG
-    if len(split) == 3: #check if I pass more then two sources ex: D1-D2-D3
+    if len(split) == 3:  # check if I pass more than two sources ex: D1-D2-D3
         print("MULTI DG")
         args.DG = True
         pkl_source2 = split[1] + "_train.pkl"
     else:
         args.DG = False
         pkl_source2 = None
-
 
     # UDA
     if args.UDA:
@@ -34,20 +41,21 @@ def take_path(args):
     else:
         pkl_target_train = None
 
-    print("SOURCE --> ", args.train_list)
-    print("VAL --> ", args.val_list)
+    print("[GENERAL] SOURCE --> ", args.train_list)
+    print("[GENERAL] VAL --> ", args.val_list)
 
     ##### UDA --> source - target
     ##### DG --> source - source - test_target
 
+    # Path for weights of the models
     args.weight_i3d = './pretrained_i3d/rgb_imagenet.pt'
     args.weight_i3d_of = './pretrained_i3d/flow_imagenet.pt'
-
-    if platform.node() == "***": # name machine or os.environ["HOME"].split("/")[-1] == "nomeaccount"
+    # todo: modify this script snip to fit your machine and write the platform name
+    if platform.node() == "***":  # name machine or os.environ["HOME"].split("/")[-1] == "nomeaccount"
         args.visual_path = "/../rgb_flow"
         args.flow_path = "/../rgb_flow"
-        args.event_path = "/../voxels_xy_"+str(args.channels_events)
-        args.flow_pwc_path = "/../voxels_xy_"+str(args.channels_events)
+        args.event_path = "/../voxels_xy_" + str(args.channels_events)
+        args.flow_pwc_path = "/../voxels_xy_" + str(args.channels_events)
         # args.train_list = "./train_val/D1_train.pkl"
         # args.val_list = "./train_val/D1_test.pkl"
         args.weight_i3d = '/../RNA-Relative-Norm-Alignment/pretrained_i3d/rgb_imagenet.pt'
@@ -67,33 +75,34 @@ def take_path(args):
         args.audio_path_model = "/../RNA-Relative-Norm-Alignment/tf_model_zoo/bninception/bn_inception.yaml"
 
     else:
-        args.visual_path = "/data/EpicKitchenDA/rgb_flow"
-        args.flow_path = "/data/EpicKitchenDA/rgb_flow"
+        # Notice structure of files must be as specified in the readme
+        args.visual_path = "/data/EpicKitchenDA/rgb_flow"  # Path for rgb flow (data) .
+        args.flow_path = "/data/EpicKitchenDA/rgb_flow"  # Path for flow path (data)
         args.event_path = "/data/EK55_events/voxels_xy_" + str(args.channels_events)
         args.flow_pwc_path = "/data/EK55_events/voxels_xy_" + str(args.channels_events)
         # args.train_list = "./train_val/D1_train.pkl"
         # args.val_list = "./train_val/D1_test.pkl"
-        args.weight_i3d = '/home/mirco/ActivityRecognition_DA/pretrained_i3d/rgb_imagenet.pt'
-        args.weight_i3d_of = '/home/mirco/ActivityRecognition_DA/pretrained_i3d/flow_imagenet.pt'
+        args.weight_i3d = '/home/pipespups/MachineLearningDeep/EGO_Project_Group4/pretrained_i3d/rgb_imagenet.pt' # Put here your path for weightd
+        args.weight_i3d_of = '/home/pipespups/MachineLearningDeep/EGO_Project_Group4/pretrained_i3d/flow_imagenet.pt' # Put here also your path
 
         pkl_source = args.shift.split("-")[0] + "_train.pkl"
         pkl_target = args.shift.split("-")[-1] + "_test.pkl"  # VAL
         pkl_target_train = args.shift.split("-")[-1] + "_train.pkl"  # TARGET
 
-        args.train_list = "/home/mirco/ActivityRecognition_DA/train_val/" + pkl_source
-        args.val_list = "/home/mirco/ActivityRecognition_DA/train_val/" + pkl_target
-        args.train_list_target = "/home/mirco/ActivityRecognition_DA/train_val/" + pkl_target_train
-        args.audio_path_model = "/home/chiara/RNA_clean/tf_model_zoo/bninception/bn_inception.yaml"
+        args.train_list = "~/MachineLearningDeep/EGO_Project_Group4/train_val/" + pkl_source
+        args.val_list = "~/MachineLearningDeep/EGO_Project_Group4/train_val/" + pkl_target
+        args.train_list_target = "~/MachineLearningDeep/EGO_Project_Group4/train_val/" + pkl_target_train
+        args.audio_path_model = "~/MachineLearningDeep/EGO_Project_Group4/tf_model_zoo/bninception/bn_inception.yaml"
         print(args.train_list_target)
 
         args.audio_path = "/home/mirco/AUDIO_EK/audio/audio_dic"
-        args.audio_path_model = "/home/chiara/RNA_clean/tf_model_zoo/bninception/bn_inception.yaml"
+        args.audio_path_model = "~/MachineLearningDeep/EGO_Project_Group4/tf_model_zoo/bninception/bn_inception.yaml"
         if args.UDA:
-            args.train_list_target = "/home/mirco/ActivityRecognition_DA/train_val/" + pkl_target_train
+            args.train_list_target = "/~/MachineLearningDeep/EGO_Project_Group4/train_val/" + pkl_target_train
             args.train_list2 = None
         if args.DG:
             args.train_list_target = None
-            args.train_list2 = "/home/mirco/ActivityRecognition_DA/train_val/" + pkl_source2
+            args.train_list2 = "~/MachineLearningDeep/EGO_Project_Group4/train_val/" + pkl_source2
             print("SOURCE 2--> ", args.train_list2)
     '''
         args.visual_path = "/../EpicKitchenVoxel/rgb_flow/"
@@ -197,6 +206,7 @@ def data_preprocessing(model, modalities, flow_prefix, args):
 
     return image_tmpl, train_transform, val_transform
 
+
 def load(weight):
     new_weight = {}
 
@@ -207,8 +217,8 @@ def load(weight):
     best_iter_score = checkpoint['best_iter_score']
     acc_mean = checkpoint['acc_mean']
     loss_mean = checkpoint['loss_mean']
-    #module.new_fc.weight
-    #module.new_fc.bias
+    # module.new_fc.weight
+    # module.new_fc.bias
     for i in checkpoint["model_state_dict"].keys():
 
         if "module.base_model.conv1" in i:
@@ -219,20 +229,28 @@ def load(weight):
     checkpoint["model_state_dict"] = new_weight
     return checkpoint
 
+
 def load_checkpoint(path, model, optimizer=None):
+    """
+    Loads the checkpoint for the model
+    :param path: The path of the .pth file from which the checkpoint is loaded. This file must have the
+    :param model: The model for which checkpoint is loaded
+    :returns
+    """
     print(path)
-    checkpoint = torch.load(path)
+    checkpoint = torch.load(path,map_location=torch.device('cpu')) #FIXME : delete map location for having cuda
     iter = checkpoint['iteration']
     best_iter = checkpoint['best_iter']
     best_iter_score = checkpoint['best_iter_score']
     acc_mean = checkpoint['acc_mean']
     loss_mean = checkpoint['loss_mean']
     model.load_state_dict(checkpoint['model_state_dict'], strict=True)
-    device = torch.device('cuda')
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu") #FIXME : I substituted this line for avoiding issues.
     model.to(device)
     if optimizer is not None:
         optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
     return model, optimizer, iter, best_iter, best_iter_score, acc_mean, loss_mean
+
 
 def load_checkpoint_flow(path, model, optimizer=None, args=None):
     print(path)
@@ -245,7 +263,8 @@ def load_checkpoint_flow(path, model, optimizer=None, args=None):
     best_iter_score = checkpoint['best_iter_score']
     acc_mean = checkpoint['acc_mean']
     loss_mean = checkpoint['loss_mean']
-    model.load_state_dict(checkpoint['model_state_dict'], strict=False) #per usare il flow di chiara ho dovuto mettere a false
+    model.load_state_dict(checkpoint['model_state_dict'],
+                          strict=False)  # per usare il flow di chiara ho dovuto mettere a false
     device = torch.device('cuda')
     model.to(device)
 
@@ -307,6 +326,7 @@ def init_model(networks, name, args, summaryWriter):
 
     task = Task(name, networks, criterion, optimizer, args.batch_size, args.total_batch, summaryWriter, args=args)
     return task
+
 
 '''
     Calculate accuracy
@@ -445,11 +465,19 @@ def softmax(scores):
     es = np.exp(scores - scores.max(axis=-1)[..., None])
     return es / es.sum(axis=-1)[..., None]
 
+
 def get_model_spec(model, args, m):
+    """
+    Function for getting the scpecifications of a given model.
+    :param model The model that we want to document
+    :param args Arguments of the script
+    :param m Modality of the given model
+    :returns: A dictionary with the model specifications
+    """
     net = {"i3d": I3D, "TSN": TSN, "TSM": TSN}
 
     """
-    egments are just for TSM, TSN; test segments are set to 1 for TSN since the testing of this network works 
+    Segments are just for TSM, TSN; test segments are set to 1 for TSN since the testing of this network works 
     differently (according to the original repo); while TSM averages the predictions of each segments with the 
     ConsensusModule within the forward function, TSN just outputs the prediction of one segment and the final output 
     is obtained averaging all the outputs outside the forward (look at validate for more details)
@@ -457,7 +485,7 @@ def get_model_spec(model, args, m):
     num_segments_test = {"i3d": args.num_frames_per_clip_test[args.modality.index(m)],
                          "TSN": 1, "TSM": args.num_frames_per_clip_test[args.modality.index(m)]}
 
-    # num_frames per clip in training
+    # num_frames per clip in training . This is obtained from parameters passed to script.
     num_frames_per_clip_train = {"i3d": args.num_frames_per_clip_train[args.modality.index(m)],
                                  "TSN": args.num_frames_per_clip_train[args.modality.index(m)],
                                  "TSM": args.num_frames_per_clip_train[args.modality.index(m)]}

@@ -3,6 +3,9 @@ from utils.transforms import *
 from utils.transforms_event import *
 
 def load(double_BN, path):
+    """
+    Function for loading weights to a model.
+    """
     state_dict = torch.load(path)
     from collections import OrderedDict
     new_state_dict = OrderedDict()
@@ -26,6 +29,16 @@ def load(double_BN, path):
     return new_state_dict
 
 class I3D(nn.Module):
+    """
+    The class for the I3D model
+
+    This class implements the I3D model discussed in the paper. It is 3D convolutional neural network used for video
+    action recognition.
+
+    Attributes:
+        cls.num_class (int): Number of output classes
+        #todo: finish this documentation with relevant parameters
+    """
     def __init__(self, num_class, num_segments, modality,
                  base_model='bninception', args=None):
         super(I3D, self).__init__()
@@ -53,7 +66,7 @@ class I3D(nn.Module):
         return logits, features, feat_for_cam, weight_softmax
 
     def _prepare_base_model(self, base_model, channels_events=1):
-        print(' * Net architecture: {}\tModality: {}'.format(base_model, self.modality))
+        print('[MODEL PREPARATION] * Net architecture: {}\tModality: {}'.format(base_model, self.modality))
         if base_model == "bninception":
             self.feature_dim = 1024
             self.input_size = 224

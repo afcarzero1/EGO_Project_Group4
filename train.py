@@ -489,7 +489,7 @@ def train(tasks, train_loader, val_loader,
 # during the validation we take 5 clips of the video and we average on them (so we have a dimension more)
 def validate(val_loader, model_list_train, model_list_test, device, num_clips_test):
     if model_list_train is not None:
-        sync_train_test_model(model_list_train, model_list_test)
+        sync_train_test_model(model_list_train, model_list_test) #
     channels = {"RGB": 3, "Flow": 2, "Event": args.channels_events}
     model_list = model_list_test
     # when validating during train, we don't have a list of models, so we create it
@@ -501,7 +501,7 @@ def validate(val_loader, model_list_train, model_list_test, device, num_clips_te
     criterion = torch.nn.CrossEntropyLoss(weight=None, size_average=None, ignore_index=-100,
                                           reduce=None, reduction='none')
     classification_weight = 1.
-
+    # Used to avoid adding this to the model itself
     with torch.no_grad():
 
         top1 = utils.utils.AverageMeter()
@@ -531,6 +531,7 @@ def validate(val_loader, model_list_train, model_list_test, device, num_clips_te
             verb_top1.reset()
             verb_top5.reset()
             loss_verb.reset()
+            val_loader.num_workers=0 #FIXME : Delete this line to have use of GPU
             for i_val, (input, label) in enumerate(val_loader):
                 for m in modalities:
                     input[m] = input[m].to(device)
