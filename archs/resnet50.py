@@ -1,7 +1,11 @@
 import torch
 import torch.nn as nn
 import torch.hub
-from torchvision.models.utils import load_state_dict_from_url
+try:
+    from torchvision.models.utils import load_state_dict_from_url
+except ImportError:
+    # Bug solved for recent versions
+    from torch.hub import load_state_dict_from_url
 import torch.nn.functional as F
 import torch
 import torch.nn as nn

@@ -76,33 +76,41 @@ def take_path(args):
 
     else:
         # Notice structure of files must be as specified in the readme
-        args.visual_path = "/data/EpicKitchenDA/rgb_flow"  # Path for rgb flow (data) .
-        args.flow_path = "/data/EpicKitchenDA/rgb_flow"  # Path for flow path (data)
+
+        # PATH OF DATA
+
+        args.visual_path = "/home/andres/MLDL/symlinks"  # Path for rgb flow (data) .
+        args.flow_path = "/home/andres/MLDL/symlinks"  # Path for flow path (data)
         args.event_path = "/data/EK55_events/voxels_xy_" + str(args.channels_events)
         args.flow_pwc_path = "/data/EK55_events/voxels_xy_" + str(args.channels_events)
         # args.train_list = "./train_val/D1_train.pkl"
         # args.val_list = "./train_val/D1_test.pkl"
-        args.weight_i3d = '/home/pipespups/MachineLearningDeep/EGO_Project_Group4/pretrained_i3d/rgb_imagenet.pt' # Put here your path for weightd
-        args.weight_i3d_of = '/home/pipespups/MachineLearningDeep/EGO_Project_Group4/pretrained_i3d/flow_imagenet.pt' # Put here also your path
 
+        # PATH OF WEIGHTS
+
+        args.weight_i3d = '/home/andres/MLDL/EGO_Project_Group4/pretrained_i3d/rgb_imagenet.pt' # Put here your path for weightd
+        args.weight_i3d_of = '/home/andres/MLDL/EGO_Project_Group4/pretrained_i3d/flow_imagenet.pt' # Put here also your path
+
+        # Take the pkl path of the source domain and the target domain
         pkl_source = args.shift.split("-")[0] + "_train.pkl"
         pkl_target = args.shift.split("-")[-1] + "_test.pkl"  # VAL
         pkl_target_train = args.shift.split("-")[-1] + "_train.pkl"  # TARGET
 
-        args.train_list = "~/MachineLearningDeep/EGO_Project_Group4/train_val/" + pkl_source
-        args.val_list = "~/MachineLearningDeep/EGO_Project_Group4/train_val/" + pkl_target
-        args.train_list_target = "~/MachineLearningDeep/EGO_Project_Group4/train_val/" + pkl_target_train
-        args.audio_path_model = "~/MachineLearningDeep/EGO_Project_Group4/tf_model_zoo/bninception/bn_inception.yaml"
+        # For training use the .pkl relative to the kitchen training domain and set also the target.
+        args.train_list = "/home/andres/MLDL/EGO_Project_Group4/train_val/" + pkl_source
+        args.val_list = "/home/andres/MLDL/EGO_Project_Group4/train_val/" + pkl_target
+        args.train_list_target = "/home/andres/MLDL/EGO_Project_Group4/train_val/" + pkl_target_train
+        args.audio_path_model = "/home/andres/MLDL/EGO_Project_Group4/tf_model_zoo/bninception/bn_inception.yaml"
         print(args.train_list_target)
 
         args.audio_path = "/home/mirco/AUDIO_EK/audio/audio_dic"
-        args.audio_path_model = "~/MachineLearningDeep/EGO_Project_Group4/tf_model_zoo/bninception/bn_inception.yaml"
+        args.audio_path_model = "/home/andres/MLDL/EGO_Project_Group4/tf_model_zoo/bninception/bn_inception.yaml"
         if args.UDA:
-            args.train_list_target = "/~/MachineLearningDeep/EGO_Project_Group4/train_val/" + pkl_target_train
+            args.train_list_target = "/home/andres/MLDL/EGO_Project_Group4/train_val/" + pkl_target_train
             args.train_list2 = None
         if args.DG:
             args.train_list_target = None
-            args.train_list2 = "~/MachineLearningDeep/EGO_Project_Group4/train_val/" + pkl_source2
+            args.train_list2 = "/home/andres/MLDL/EGO_Project_Group4/train_val/" + pkl_source2
             print("SOURCE 2--> ", args.train_list2)
     '''
         args.visual_path = "/../EpicKitchenVoxel/rgb_flow/"
@@ -147,8 +155,24 @@ def get_domains_and_labels(args):
 
 
 def data_preprocessing(model, modalities, flow_prefix, args):
+    """Function doing some pre-processing for data
+
+    Function for preparing dictionaries containing image name templates for each modality and preparing train/val
+    dictionaries containing the transformations (augmentation+normalization).
+    Args:
+        model ({Model}):  Dictionary with the models instances used in the script.
+        modalities ([str]) : List of the modalities to be used in the program.
+        flow_prefix (str) : The prefix to add to flow frames. Only used in "abottin1" system.
+        args (Namespace) : Arguments passed to the script.
+
+    Returns:
+        image_tmpl (dict(str)) : Dictionary with frames template for each modality.
+        train_transform (dict) : Dictionary with train transformation for each modality.
+        val_transform (dict) : DIctionary with validation transforms for each modality
+
+    """
     crop_size = {m: model[m].crop_size for m in modalities}
-    train_augmentation = {m: model[m].get_augmentation(m) for m in modalities}
+    train_augmentation = {m: model[m].get_augmentation(m) for m in modalities} #Data augmentation transformations
     image_tmpl = {}
     train_transform = {}
     val_transform = {}
@@ -187,22 +211,22 @@ def data_preprocessing(model, modalities, flow_prefix, args):
                 Stack(roll=True),
                 ToTorchFormatTensor(div=False),
             ])
-
         else:
+            # Transformations for training
             train_transform[m] = torchvision.transforms.Compose([
                 train_augmentation[m],
                 Stack(roll=False),
                 ToTorchFormatTensor(div=not args.normalize_images),
                 GroupNormalize(args, model[m].input_mean, model[m].input_std, model[m].range)
             ])
-
+            # Transformation for validation
             val_transform[m] = torchvision.transforms.Compose([
                 GroupCenterCrop(crop_size[m]),
                 Stack(roll=False),
                 ToTorchFormatTensor(div=not args.normalize_images),
                 GroupNormalize(args, model[m].input_mean, model[m].input_std, model[m].range)
             ])
-            print(val_transform)
+            print(f"[MODEL PREPARATION] The validation transform is : {val_transform}")
 
     return image_tmpl, train_transform, val_transform
 
@@ -231,14 +255,15 @@ def load(weight):
 
 
 def load_checkpoint(path, model, optimizer=None):
+    r"""Loads the checkpoint for the model
+    Args:
+        path (str) : The path of the .pth file from which the checkpoint is loaded. This file must have the
+        model (torch.nn.Model | torch.nn.DataParallel): The model for which the checkpoint is loaded
+    Returns:
+        model () : Model with checkpoint loaded.
     """
-    Loads the checkpoint for the model
-    :param path: The path of the .pth file from which the checkpoint is loaded. This file must have the
-    :param model: The model for which checkpoint is loaded
-    :returns
-    """
-    print(path)
-    checkpoint = torch.load(path,map_location=torch.device('cpu')) #FIXME : delete map location for having cuda
+    print("[MODEL LOADING] The model checkpoint is loaded from : ",path)
+    checkpoint :{} = torch.load(path,map_location=torch.device("cuda" if torch.cuda.is_available() else "cpu")) #FIXME : delete map location for having cuda
     iter = checkpoint['iteration']
     best_iter = checkpoint['best_iter']
     best_iter_score = checkpoint['best_iter_score']
@@ -404,7 +429,7 @@ def accuracy(output, target, topk=(1,)):
     class_correct, class_total = accuracy_per_class(correct[:1].view(-1), target, num_label)
     res = []
     for k in topk:
-        correct_k = correct[:k].view(-1).to(torch.float32).sum(0)
+        correct_k = correct[:k].reshape(-1).to(torch.float32).sum(0) #FIXME : CHANGE RESHAPE FOR VIEW WHEN working with cuda
         res.append(float(correct_k.mul_(100.0 / batch_size)))
     if len(res) == 1:
         res.append(0)

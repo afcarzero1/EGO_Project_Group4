@@ -3,8 +3,10 @@ from utils.transforms import *
 from utils.transforms_event import *
 
 def load(double_BN, path):
-    """
-    Function for loading weights to a model.
+    r"""Function for loading weights to a model.
+    Args:
+        path (str): It is the path of the model to load. It is passed internally to torch.load function. It is a pickle file.
+        double_BN (bool): Boolean indicating if using double_BN
     """
     state_dict = torch.load(path)
     from collections import OrderedDict

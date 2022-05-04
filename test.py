@@ -49,7 +49,7 @@ def main():
     utils.utils.take_path(args)
     source_domains, target_domains, _ = utils.utils.set_domain_shift(args)
     '''
-        Verbs:
+        Verbs (the list of possible predicitons for the action recognition):
         0 - take (get)
         1 - put-down (put/place)
         2 - open
@@ -65,8 +65,8 @@ def main():
     '''
 
     num_class = 8
-    # Select the device to run
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    # Select the device to run. Select cuda only if available.
+    device = "cpu"#FIXME :torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"[GENERAL]Using {device} device")
     '''
             Network: feature extractor & domain discriminator
@@ -76,14 +76,14 @@ def main():
     model_spec = {m: get_model_spec(model[m], args, m) for m in modalities}
     num_frames_per_clip_test = {m: model_spec[m]["num_frames_per_clip_test"] for m in modalities}
     dense_sampling_test = {m: args.dense_sampling_test[modalities.index(m)] for m in modalities}
-    # Instantiation of the model. Instantiate one for each modality.
+    # Instantiation of the model. Instantiate one for each modality indicated in the arguments.
     model_template = {m: model_spec[m]["net"](num_class, model_spec[m]["segments_test"], m,
                                               base_model=arch[m],
                                               args=args,
                                               **model_spec[m]["kwargs"])
                       for m in modalities}
     image_tmpl, _, val_transform = utils.utils.data_preprocessing(model_template, modalities, args.flow_prefix, args)
-    # Instantiate the data loader
+    # Instantiate the data loader using the image template obtained and the validation transform.
     val_loader = torch.utils.data.DataLoader(
         VideoDataset(pd.read_pickle(args.val_list),
                      args.modality,
@@ -112,7 +112,8 @@ def main():
         print('\nRESTORE FROM \'{}\'\n'.format(path))
         # list all files in chronological order (1st is most recent, last is less recent)
         TASK_NAME = 'action-classifier' # todo: put again action-classifier
-        saved_models = [x
+        # List of paths to the models to load (.pth files)
+        saved_models : [Path]= [x
                         for x in
                         reversed(sorted(Path(path).iterdir(), key=lambda x: os.path.basename(x).split('.')[0][-1]))
                         if TASK_NAME in x.name and ('1000' not in x.name and '2000' not in x.name and
@@ -132,6 +133,12 @@ def main():
                                                   base_model=arch[m],
                                                   args=args,
                                                   **model_spec[m]["kwargs"])
+            # Now we create the model template using DataParallel. I this way the application is parallelized at the
+            # module level by splitting the input across the devices.
+            # As explained in documentation, in froward pass the module is replicated in each device and in backward pass
+            # gradients from each replica are summed up into the original model.
+            # Read in the documentation the possible problems that come from this usage. In particular any update on the
+            # running module during forward will be lost.
             model_template = torch.nn.DataParallel(model_template).to(device) # Create the model template
             model[m], _, _, _, _, _, _ = utils.utils.load_checkpoint(str(model_path), model_template, optimizer=None) # Load checkpoint
             print('[{}] Mode: {} OK!\tFile = \'{}\''.format(i // 2 + 1, m, model_path.name))
@@ -142,6 +149,7 @@ def main():
     print("---------- START TESTING -----------")
 
     log_filename = args.shift + '_' + '-'.join(modalities) + '-' + str(args.num_clips_test) + 'clips.txt'
+    #Call to the validation function. Used for testing the model.
     test_results = validate(val_loader, None, model_list, device, args.num_clips_test)
 
     os.makedirs(os.path.join('TEST_RESULTS', args.name), exist_ok=True)

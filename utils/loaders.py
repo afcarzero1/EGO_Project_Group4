@@ -12,6 +12,7 @@ import numpy as np
 from numpy.random import randint
 import pickle
 
+
 class VideoDataset(data.Dataset):
     """
     Class for implementing the video dataset.
@@ -19,15 +20,21 @@ class VideoDataset(data.Dataset):
     Attributes
     ----------
     list_file : pd.DataFrame
-        Pandas DataFrame with annotations for the video dataset
+        Pandas DataFrame with annotations for the video dataset.
     num_clips : int
         Number of clips to analyze
     video_list : [EpicVideoRecord]
         It is a list of EpicVideoRecords. Each of the elements contains information about a clip such as the kitchen
         participant, start frame, etc...
-    :todo finish the documentation
+    num_frames : int
+        Number of frames in a clip
+    dense_sampling : bool
+        The sampling modality. When dense sampling all the samples are consecutive frames of the clip whereas for not
+        dense sampling we sample randomly (uniformly) from the clip.
+    #todo: finish the documentation
 
     """
+
     def __init__(self, list_file, modality, image_tmpl,
                  num_frames_per_clip, dense_sampling,
                  sample_offset=0, num_clips=1,
@@ -40,26 +47,26 @@ class VideoDataset(data.Dataset):
 
         # Get list of user environment variables.
         self.load_cineca_data = os.environ["HOME"].split("/")[-1] == "abottin1"
-        self.sync = args.sync #Synchronization parameter todo: understand where it must be used
-        self.num_frames = num_frames_per_clip # Number of frames in a clip
+        self.sync = args.sync  # Synchronization parameter todo: understand where it must be used
+        self.num_frames = num_frames_per_clip  # Number of frames in a clip
         self.num_clips = num_clips
-        self.resampling_rate= args.resampling_rate
+        self.resampling_rate = args.resampling_rate
         self.sample_offset = sample_offset
         self.fixed_offset = fixed_offset
         self.dense_sampling = dense_sampling
         self.audio_path = args.audio_path
-        # self.audio_path = pickle.load(open(self.audio_path, 'rb')) # todo: uncomment this line
+        # self.audio_path = pickle.load(open(self.audio_path, 'rb')) # todo: uncomment this line for adding audio
 
         self.modalities = modality  # considered modalities (ex. [RGB, Flow, Spec, Event])
         self.mode = mode  # 'train', 'val' or 'test'
         self.args = args
-        self.factor = {"RGB": 1, "Spec":1, "Flow": 2, "Event": self.args.rgb4e}
+        self.factor = {"RGB": 1, "Spec": 1, "Flow": 2, "Event": self.args.rgb4e}
 
-        self.stride = {"RGB": 2, "Spec":1, "Flow": 1, "Event": 1}
+        self.stride = {"RGB": 2, "Spec": 1, "Flow": 1, "Event": 1}
         self.flow_path = flow_path
         self.visual_path = visual_path
         self.event_path = event_path
-        self.list_file : pd.DataFrame = list_file  # all files paths taken from .pkl file
+        self.list_file: pd.DataFrame = list_file  # all files paths taken from .pkl file
 
         # data related
         self.num_clips = num_clips
@@ -96,23 +103,32 @@ class VideoDataset(data.Dataset):
              indices ([int]) : List of indices.
         FIXME : Complete this class. Now it does dummy stuff
         """
-        indices: [] = []
+        indices: np.ndarray = np.zeros(0)
         starting_frame: int = record.start_frame
         end_frame: int = record.end_frame
-        num_frames: int = self.num_frames[modality] # Rettrieve the number of frames to be sampled from the given modality.
-        dense_sampling: bool = self.dense_sampling # Check whether sampling is dense or not
-        if modality == 'RGB':
-            # Check if the sampling is dense
-            if dense_sampling:
-                # In case of dense sampling take a random point in the clip and take num_frames consecutive frames.
-                indices_start = np.random.randint(starting_frame,end_frame-num_frames)
-                indices = [idx for idx in range(indices_start,indices_start+num_frames)]
-            else:
-                # In case of not dense sampling take uniform distributed frames from the clip.
-                indices = np.random.randint(starting_frame,end_frame,num_frames).tolist()
-        elif modality == 'Flow':
-            #todo : write the code for this
-            indices = None
+        num_frames: int = self.num_frames[modality]  # Retrieve the number of frames to be sampled from the given modality.
+        dense_sampling: bool = self.dense_sampling  # Check whether sampling is dense or not
+
+        # In the validation case we take more samples FIXME: put again self.num_clips
+        for i in range(self.num_clips):
+            if modality == 'RGB':
+                # Check if the sampling is dense
+                if dense_sampling:
+                    # In case of dense sampling take a random point in the clip and take num_frames consecutive frames.
+                    # We take the initial frame randomly from the beginning of the clip to the end of it in such a way that
+                    # the samples do not go out of the clip (that is why we subtract the number of frames to sample)
+                    indices_start = np.random.randint(0, end_frame - starting_frame - num_frames)
+                    indices_to_add = np.arange(indices_start,indices_start+num_frames)
+                    indices=np.concatenate((indices,indices_to_add),axis=0)
+                    #indices_to_add = [idx for idx in range(indices_start, indices_start + num_frames)]
+                    #for index in indices_to_add:
+                    #    indices.append(index)
+                else:
+                    # In case of not dense sampling take uniform distributed frames from the clip.
+                    indices.append(np.random.randint(0, end_frame - starting_frame, num_frames).tolist())
+            elif modality == 'Flow':
+                # todo : write the code for this
+                indices = None
 
         return indices
 
@@ -133,7 +149,6 @@ class VideoDataset(data.Dataset):
             segment_indices = {}
             for m in self.modalities:
                 segment_indices[m] = self._get_val_indices(record, m)
-
 
         for m in self.modalities:
             img, label = self.get(m, record, segment_indices[m])
@@ -156,7 +171,6 @@ class VideoDataset(data.Dataset):
         '''
 
         return self._log_specgram(samples)
-
 
     def get(self, modality, record, indices):
         r""" Function for getting a set of records.
@@ -192,7 +206,7 @@ class VideoDataset(data.Dataset):
             return [img]
         elif modality == 'Flow':
             idx_untrimmed = (record.start_frame // 2) + idx
-            #print(idx_untrimmed)
+            # print(idx_untrimmed)
             try:
                 x_img = Image.open(os.path.join(self.flow_path, record.untrimmed_video_name,
                                                 self.image_tmpl[modality].format('x', idx_untrimmed))).convert('L')

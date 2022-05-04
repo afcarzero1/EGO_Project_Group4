@@ -488,6 +488,18 @@ def train(tasks, train_loader, val_loader,
 
 # during the validation we take 5 clips of the video and we average on them (so we have a dimension more)
 def validate(val_loader, model_list_train, model_list_test, device, num_clips_test):
+    r""" Validation function
+    THis function validates the performance of a given model.
+    Args:
+        val_loader: The Loader of the test data
+        model_list_train:
+        model_list_test:
+        device:
+        num_clips_test: The number of clips for taking in each test
+
+    Returns:
+
+    """
     if model_list_train is not None:
         sync_train_test_model(model_list_train, model_list_test) #
     channels = {"RGB": 3, "Flow": 2, "Event": args.channels_events}
@@ -524,7 +536,7 @@ def validate(val_loader, model_list_train, model_list_test, device, num_clips_te
         class_accuracies = []
         # Iterate over the models
         for j, model in enumerate(model_list):
-            print('Testing model %d . . .' % j)
+            print('[TESTING] Testing model %d . . .' % j)
             # get batch
             top1.reset()
             top5.reset()
