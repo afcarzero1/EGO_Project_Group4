@@ -543,8 +543,10 @@ def validate(val_loader, model_list_train, model_list_test, device, num_clips_te
             verb_top1.reset()
             verb_top5.reset()
             loss_verb.reset()
-            val_loader.num_workers=0 #FIXME : Delete this line to have use of GPU
+            val_loader.num_workers=0 #FIXME : Delete this line to have use of GPU in loader
+            # Iterate over the input given by the validation loader.
             for i_val, (input, label) in enumerate(val_loader):
+                # Input is
                 for m in modalities:
                     input[m] = input[m].to(device)
                     B, C, H, W = input[m].shape

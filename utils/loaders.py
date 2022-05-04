@@ -28,7 +28,7 @@ class VideoDataset(data.Dataset):
         participant, start frame, etc...
     num_frames : int
         Number of frames in a clip
-    dense_sampling : bool
+    dense_sampling : bool | dict(bool)
         The sampling modality. When dense sampling all the samples are consecutive frames of the clip whereas for not
         dense sampling we sample randomly (uniformly) from the clip.
     #todo: finish the documentation
@@ -76,6 +76,14 @@ class VideoDataset(data.Dataset):
         self.video_list = [EpicVideoRecord(tup, self.args.rgb4e) for tup in self.list_file.iterrows()]
 
     def _sample_train(self, record, modality='RGB'):
+        f""" Private function for sampling training indices   
+        Args:
+            record: 
+            modality: 
+
+        Returns:
+
+        """
         if self.dense_sampling[modality]:
             '''
             TO BE COMPLETED!
@@ -92,45 +100,64 @@ class VideoDataset(data.Dataset):
         '''
         TO BE COMPLETED!
         '''
+        # FIXME : Is it okay to use num_frames of RGB. Why train indices do not depend on the modality as val indices?
+        segment_indices: np.ndarray = self._sample_indices(record.start_frame, record.end_frame,
+                                                           self.num_frames["RGB"], self.dense_sampling)
+
         return segment_indices
 
-    def _get_val_indices(self, record, modality) -> [int]:
+    def _get_val_indices(self, record, modality: str) -> np.ndarray:
         r""" This is a private function for getting the indices for validation.
         Arguments:
             record (EpicVideoRecord) : This is the record for which we want to get the validation indices.
             modality (str) : This is the modality of the experiment.
         Returns:
-             indices ([int]) : List of indices.
-        FIXME : Complete this class. Now it does dummy stuff
+             indices (np.ndarray) : List of indices.
         """
         indices: np.ndarray = np.zeros(0)
         starting_frame: int = record.start_frame
         end_frame: int = record.end_frame
-        num_frames: int = self.num_frames[modality]  # Retrieve the number of frames to be sampled from the given modality.
+        num_frames: int = self.num_frames[
+            modality]  # Retrieve the number of frames to be sampled from the given modality.
         dense_sampling: bool = self.dense_sampling  # Check whether sampling is dense or not
 
         # In the validation case we take more samples FIXME: put again self.num_clips
         for i in range(self.num_clips):
             if modality == 'RGB':
-                # Check if the sampling is dense
-                if dense_sampling:
-                    # In case of dense sampling take a random point in the clip and take num_frames consecutive frames.
-                    # We take the initial frame randomly from the beginning of the clip to the end of it in such a way that
-                    # the samples do not go out of the clip (that is why we subtract the number of frames to sample)
-                    indices_start = np.random.randint(0, end_frame - starting_frame - num_frames)
-                    indices_to_add = np.arange(indices_start,indices_start+num_frames)
-                    indices=np.concatenate((indices,indices_to_add),axis=0)
-                    #indices_to_add = [idx for idx in range(indices_start, indices_start + num_frames)]
-                    #for index in indices_to_add:
-                    #    indices.append(index)
-                else:
-                    # In case of not dense sampling take uniform distributed frames from the clip.
-                    indices.append(np.random.randint(0, end_frame - starting_frame, num_frames).tolist())
+                indices_to_add = self._sample_indices(starting_frame, end_frame, num_frames, dense_sampling)
+                indices = np.concatenate((indices, indices_to_add), axis=0)
             elif modality == 'Flow':
-                # todo : write the code for this
-                indices = None
+                indices_to_add = self._sample_indices(starting_frame, end_frame, num_frames, dense_sampling)
+                indices = np.concatenate((indices, indices_to_add), axis=0)
 
         return indices
+
+    def _sample_indices(self, starting_frame: int, end_frame: int, num_frames: int, dense: bool) -> np.ndarray:
+        r""" Function for sampling frames
+        Args:
+            starting_frame (int): The starting frame of the clip
+            end_frame (int): The ending frame of the clip
+            num_frames (int): Number of frames to sample
+            dense (bool): Modality of sampling. In case of dense sampling frames are consecutive.
+
+        Returns:
+            indices (np.ndarray) : Array with list of indices to sample
+
+        """
+        indices_to_add = np.zeros(0)
+        if dense:
+            # In case of dense sampling take a random point in the clip and take num_frames consecutive frames.
+            # We take the initial frame randomly from the beginning of the clip to the end of it in such a way that
+            # the samples do not go out of the clip (that is why we subtract the number of frames to sample)
+            if (end_frame - starting_frame - num_frames <= 0):
+                # In case the clip is too small it is not possible to sample it
+                raise RuntimeError(f"The clip length is not enough to sample {num_frames}")
+            indices_start = np.random.randint(0, end_frame - starting_frame - num_frames)
+            indices_to_add = np.arange(indices_start, indices_start + num_frames)
+        else:
+            # In case of not dense sampling take uniform distributed frames from the clip.
+            indices_to_add = np.random.randint(0, end_frame - starting_frame, num_frames)
+        return indices_to_add
 
     def __getitem__(self, index):
         """
@@ -191,11 +218,11 @@ class VideoDataset(data.Dataset):
         return process_data, record.label
 
     def _load_data(self, modality, record, idx):
-        r""" Private function for loading the data
+        r""" Private function for loading the data (a frame typically) from the memory.
         Arguments:
             modality (str) : It is the modality of the experiment
             record (EpicVideoRecord) : The number of the record to retrieve
-            idx (int) : The index of the frame # FIXME : Verify this is really the index of the frame
+            idx (int) : The index of the frame
 
         """
 
@@ -213,7 +240,8 @@ class VideoDataset(data.Dataset):
                 y_img = Image.open(os.path.join(self.flow_path, record.untrimmed_video_name,
                                                 self.image_tmpl[modality].format('y', idx_untrimmed))).convert('L')
             except FileNotFoundError:
-                for i in range(0, 3):
+                found = False
+                for i in range(0, 10): #FIXME : Put again 3, why it is not working ?
                     found = True
                     try:
                         x_img = Image.open(os.path.join(self.flow_path, record.untrimmed_video_name,
@@ -229,6 +257,9 @@ class VideoDataset(data.Dataset):
 
                     if found:
                         break
+                if not found:
+                    raise RuntimeError(f"Flow frame :{idx_untrimmed} Kitchen : {record.kitchen_p} Record"
+                                       f": {record.recording} not found")
             return [x_img, y_img]
         elif modality == 'Event':
             idx_untrimmed = (record.start_frame // self.args.rgb4e) + idx

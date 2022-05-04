@@ -126,7 +126,7 @@ def main():
         for i, model_path in enumerate(saved_models):
             if i % len(modalities) == 0:
                 model = {}
-            m : str = model_path.name.split('_')[-3].upper() #todo : remove upper ,put -2 again (why I changed this?, name of model seem wrong)
+            m : str = model_path.name.split('_')[-3] #todo : remove upper ,put -2 again (why I changed this?, name of model seem wrong)
             if m == "Flow" and KD_from_flow:
                 continue
             model_template = model_spec[m]["net"](num_class, model_spec[m]["segments_test"], m,
