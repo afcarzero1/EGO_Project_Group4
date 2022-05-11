@@ -117,17 +117,19 @@ class VideoDataset(data.Dataset):
         indices: np.ndarray = np.zeros(0)
         starting_frame: int = record.start_frame
         end_frame: int = record.end_frame
-        num_frames: int = self.num_frames[
-            modality]  # Retrieve the number of frames to be sampled from the given modality.
+        # Retrieve the number of frames to be sampled from the given modality.
+        num_frames: int = self.num_frames[modality]
         dense_sampling: bool = self.dense_sampling  # Check whether sampling is dense or not
 
-        # In the validation case we take more samples FIXME: put again self.num_clips
+        # In the validation case we take more samples
         for i in range(self.num_clips):
             if modality == 'RGB':
                 indices_to_add = self._sample_indices(starting_frame, end_frame, num_frames, dense_sampling)
                 indices = np.concatenate((indices, indices_to_add), axis=0)
             elif modality == 'Flow':
-                indices_to_add = self._sample_indices(starting_frame, end_frame, num_frames, dense_sampling)
+                # In the case of flow modality the number of frames are halved so the end frame to be taken is halved
+                # too.
+                indices_to_add = self._sample_indices(starting_frame//2, end_frame//2, num_frames, dense_sampling)
                 indices = np.concatenate((indices, indices_to_add), axis=0)
 
         return indices
@@ -151,8 +153,14 @@ class VideoDataset(data.Dataset):
             # the samples do not go out of the clip (that is why we subtract the number of frames to sample)
             if (end_frame - starting_frame - num_frames <= 0):
                 # In case the clip is too small it is not possible to sample it
-                raise RuntimeError(f"The clip length is not enough to sample {num_frames}")
-            indices_start = np.random.randint(0, end_frame - starting_frame - num_frames)
+                #raise RuntimeError(f"The clip length is not enough to sample {num_frames}")
+                indices_start = 0 #FIXME : There is still the chance of going out of boundary. We would have to put num_frames
+                # FIXME : equal to end_frame-starting_frame but in that case we have less samples. A solution is to resample
+                # FIXME : the last frame but it does not seem correct. Another solution is to sample each frame twice
+                # FIXME : so that we always sample something with sense, but is it the correct approach? Moreover, why there are
+                # FIXME : half of frames ??
+            else:
+                indices_start = np.random.randint(0, end_frame - starting_frame - num_frames)
             indices_to_add = np.arange(indices_start, indices_start + num_frames)
         else:
             # In case of not dense sampling take uniform distributed frames from the clip.
@@ -227,7 +235,8 @@ class VideoDataset(data.Dataset):
         """
 
         if modality == 'RGB' or modality == 'RGBDiff':
-            idx_untrimmed = record.start_frame + idx
+            idx_untrimmed: int = record.start_frame + idx
+            # Take the image in the following path.
             img = Image.open(os.path.join(self.visual_path, record.untrimmed_video_name,
                                           self.image_tmpl[modality].format(idx_untrimmed))).convert('RGB')
             return [img]
