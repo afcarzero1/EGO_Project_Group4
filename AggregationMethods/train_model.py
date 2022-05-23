@@ -25,24 +25,32 @@ def main():
     args["base_path"] = getBasePath(__file__)
     # Get the name of the file and folder for saving results
     file_name: str = getFileName(args)
-    results_path : str = getFolderName(args)
+    results_path: str = getFolderName(args)
 
     # Define parameters
-    model_class, parameters = instantiateModels(args)
+    model_class, parameters, external_parameters = instantiateModels(args)
     # Do grid search for finding best parameters
-    for config in ParameterGrid(parameters):
-        if args["verbose"]:
-            print("[GENERAL] Testing", config)
-        args["config"] = config
-        # Instantiate model with the configuration specified
-        model_instance = model_class(**config)
 
-        accuracy_stats, loss_stats = train(model_instance, args)
 
-        # Save the accuracy and loss statistics
-        saveMetrics(accuracy_stats, file_name + "_accuracies",results_path, args)
-        saveMetrics(loss_stats, file_name + "_losses", results_path,args)
+    total_models : int = len(ParameterGrid(external_parameters))*len(ParameterGrid(parameters))
+    i:int=0
+    for external_config in ParameterGrid(external_parameters):
+        print(f"Starting model {i+1}/{total_models}")
+        args["early"] = external_config["early"]
+        args["weight_decay"] = external_config["weight_decay"]
+        for config in ParameterGrid(parameters):
+            if args["verbose"]:
+                print("[GENERAL] Testing", config)
+            args["config"] = (config, external_config)
+            # Instantiate model with the configuration specified
+            model_instance = model_class(**config)
 
+            accuracy_stats, loss_stats = train(model_instance, args)
+
+            # Save the accuracy and loss statistics
+            saveMetrics(accuracy_stats, file_name + "_accuracies", results_path, args)
+            saveMetrics(loss_stats, file_name + "_losses", results_path, args)
+        i+=1
 
 def train(model, args):
     """
@@ -107,7 +115,6 @@ def train(model, args):
         'train': [],
         "val": []
     }
-
 
     if verbose:
         print("[GENERAL] Starting training")
@@ -207,24 +214,27 @@ def train(model, args):
     return accuracy_stats, loss_stats
 
 
-
 def instantiateModels(args):
     aggregator: str = args["temporal_aggregator"]
     # Dictionary with available models for temporal aggregation
     models = {"AvgPooling": NeuralNetAvgPooling,
               "TRN": TRNmodule.RelationModuleMultiScaleWithClassifier}
     # Dictionary with the parameters to test in each model
-    
-    avg_pooling_parameters = {"dropout": [0,0.1,0.2], "layers": [
-                                                              [512]], "early": [True, False],
-                  "weight_decay": [0,1e-5, 2e-5,5e-5,1e-4, 1e-6,1e-9]}
 
+    avg_pooling_parameters = {"dropout": [0, 0.25, 0.5], "hidden_sizes": [[512], [512, 64]]}
+    avg_pooling_external = {"early": [True, False], "weight_decay": [0, 1e-5, 1e-6]}
 
+    trn_parameters = {"dropout": [0.6, 0.1, 0.2, 0.7], "img_feature_dim": [2048], "num_frames": [5], "num_class": [8]}
+    trn_external = {"early": [True, False], "weight_decay": [0, 1e-5, 1e-6]}
 
-    parameters = {"AvgPooling": {"dropout": [0.6, 0.1, 0.2, 0.7]},
-                  "TRN": {"dropout": [0.6, 0.1, 0.2, 0.7],"img_feature_dim" : [2048],"num_frames" : [5],"num_class":[8]}}
+    # Define dictionaries
+    parameters = {"AvgPooling": avg_pooling_parameters,
+                  "TRN": trn_parameters}
 
-    return models[aggregator], parameters[aggregator]
+    external = {"AvgPooling": avg_pooling_external,
+                "TRN": trn_external}
+
+    return models[aggregator], parameters[aggregator], external[aggregator]
 
 
 if __name__ == '__main__':
