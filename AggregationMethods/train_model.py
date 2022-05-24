@@ -11,10 +11,10 @@ from tqdm import tqdm
 import TRNmodule
 
 # My libraries
-from AggregationMethods.Models.AvgClassifier import NeuralNetAvgPooling
-from AggregationMethods.utils.feature_loaders import FeaturesDataset
-from AggregationMethods.utils.utils import multiclassAccuracy, getFileName, saveMetrics, getBasePath, getFolderName
-from AggregationMethods.utils.args import parser
+from Models.AvgClassifier import NeuralNetAvgPooling
+from utils.feature_loaders import FeaturesDataset
+from utils.utils import multiclassAccuracy, getFileName, saveMetrics, getBasePath, getFolderName
+from utils.args import parser
 
 
 def main():
@@ -35,11 +35,12 @@ def main():
     total_models : int = len(ParameterGrid(external_parameters))*len(ParameterGrid(parameters))
     i:int=0
     for external_config in ParameterGrid(external_parameters):
-        print(f"Starting model {i+1}/{total_models}")
+
         args["early"] = external_config["early"]
         args["weight_decay"] = external_config["weight_decay"]
         for config in ParameterGrid(parameters):
             if args["verbose"]:
+                print(f"[GENERAL]Starting model {i + 1}/{total_models}")
                 print("[GENERAL] Testing", config)
             args["config"] = (config, external_config)
             # Instantiate model with the configuration specified
@@ -50,7 +51,7 @@ def main():
             # Save the accuracy and loss statistics
             saveMetrics(accuracy_stats, file_name + "_accuracies", results_path, args)
             saveMetrics(loss_stats, file_name + "_losses", results_path, args)
-        i+=1
+            i+=1
 
 def train(model, args):
     """
