@@ -12,6 +12,7 @@ import TRNmodule
 
 # My libraries
 from Models.AvgClassifier import NeuralNetAvgPooling
+from Models.MultiHeadAttention import MultiHeadAttentionModule,Encoder,MultiHeadAttentionClassifier
 from utils.feature_loaders import FeaturesDataset
 from utils.utils import multiclassAccuracy, getFileName, saveMetrics, getBasePath, getFolderName
 from utils.args import parser
@@ -31,9 +32,8 @@ def main():
     model_class, parameters, external_parameters = instantiateModels(args)
     # Do grid search for finding best parameters
 
-
-    total_models : int = len(ParameterGrid(external_parameters))*len(ParameterGrid(parameters))
-    i:int=0
+    total_models: int = len(ParameterGrid(external_parameters)) * len(ParameterGrid(parameters))
+    i: int = 0
     for external_config in ParameterGrid(external_parameters):
 
         args["early"] = external_config["early"]
@@ -51,7 +51,8 @@ def main():
             # Save the accuracy and loss statistics
             saveMetrics(accuracy_stats, file_name + "_accuracies", results_path, args)
             saveMetrics(loss_stats, file_name + "_losses", results_path, args)
-            i+=1
+            i += 1
+
 
 def train(model, args):
     """
@@ -219,7 +220,8 @@ def instantiateModels(args):
     aggregator: str = args["temporal_aggregator"]
     # Dictionary with available models for temporal aggregation
     models = {"AvgPooling": NeuralNetAvgPooling,
-              "TRN": TRNmodule.RelationModuleMultiScaleWithClassifier}
+              "TRN": TRNmodule.RelationModuleMultiScaleWithClassifier,
+              "MultiAttention": MultiHeadAttentionClassifier}
     # Dictionary with the parameters to test in each model
 
     avg_pooling_parameters = {"dropout": [0, 0.25, 0.5], "hidden_sizes": [[512], [512, 64]]}
@@ -228,12 +230,16 @@ def instantiateModels(args):
     trn_parameters = {"dropout": [0.6, 0.1, 0.2, 0.7], "img_feature_dim": [2048], "num_frames": [5], "num_class": [8]}
     trn_external = {"early": [True, False], "weight_decay": [0, 1e-5, 1e-6]}
 
+    multi_parameters = {"attention_heads": [1], "dropout": [0.2],"hidden_sizes": [[512]]}
+    multi_external = trn_external
     # Define dictionaries
     parameters = {"AvgPooling": avg_pooling_parameters,
-                  "TRN": trn_parameters}
+                  "TRN": trn_parameters,
+                  "MultiAttention": multi_parameters}
 
     external = {"AvgPooling": avg_pooling_external,
-                "TRN": trn_external}
+                "TRN": trn_external,
+                "MultiAttention":multi_external}
 
     return models[aggregator], parameters[aggregator], external[aggregator]
 
