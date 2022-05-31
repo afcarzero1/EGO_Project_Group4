@@ -1,10 +1,9 @@
 #!/bin/bash
 
-echo "RGB modality"
-python train_model.py --verbose --epochs 600 --model TSM --temporal_aggregator TRN --transpose_input --shift D1-D1 --modality RGB
-python train_model.py --verbose --epochs 600 --model TSM --temporal_aggregator TRN --transpose_input --shift D2-D2 --modality RGB
-python train_model.py --verbose --epochs 600 --model TSM --temporal_aggregator TRN --transpose_input --shift D2-D2 --modality RGB
-
-python train_model.py --verbose --epochs 600 --model i3d --temporal_aggregator AvgPooling --shift D1-D1 --modality RGB
-python train_model.py --verbose --epochs 600 --model i3d --temporal_aggregator AvgPooling --shift D2-D2 --modality RGB
-python train_model.py --verbose --epochs 600 --model i3d --temporal_aggregator AvgPooling --shift D3-D3 --modality RGB
+echo "Self attention Script"
+echo "D1"
+python3 train_model.py --verbose --epochs 60 --model TSM --temporal_aggregator MultiAttention --shift D3-D3 --modality Flow --transpose_input --batch_size 700 --learning_rate 0.0001 --frequency_validation 60
+echo "D2"
+python3 train_model.py --verbose --epochs 60 --model TSM --temporal_aggregator MultiAttention --shift D2-D2 --modality Flow --transpose_input --batch_size 700 --learning_rate 0.0001 --frequency_validation 60
+echo "D3"
+python3 train_model.py --verbose --epochs 60 --model TSM --temporal_aggregator MultiAttention --shift D3-D3 --modality Flow --transpose_input --batch_size 700 --learning_rate 0.0001 --frequency_validation 60
