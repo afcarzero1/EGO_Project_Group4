@@ -25,4 +25,5 @@ parser.add_argument("--epochs",type=int,default=600,help="The number of epochs u
 parser.add_argument("--transpose_input",action="store_true",help="Defines if the output of the dataset must be transposed before going to the model. Necessary for TRM wh i3d for example")
 parser.add_argument("--temporal_aggregator",type=str,default="AvgPooling")
 parser.add_argument("--learning_rate",type=float,default=0.01,help="The learning rate used for the training")
+parser.add_argument("--frequency_validation",type=int,default=10,help="The learning rate used for the training")
 
