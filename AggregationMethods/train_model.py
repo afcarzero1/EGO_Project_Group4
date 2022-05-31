@@ -1,4 +1,5 @@
 import os
+import gc
 
 import torch
 from torch.utils.data import DataLoader
@@ -11,6 +12,8 @@ from tqdm import tqdm
 import TRNmodule
 
 # My libraries
+from Models.AttentionBaselineClassifier import AttentionBaseline
+from Models.MultiHeadAttentionAlreadyDone import EncoderLayer
 from Models.AvgClassifier import NeuralNetAvgPooling
 from Models.MultiHeadAttention import MultiHeadAttentionModule,Encoder,MultiHeadAttentionClassifier
 from utils.feature_loaders import FeaturesDataset
@@ -42,11 +45,20 @@ def main():
             if args["verbose"]:
                 print(f"[GENERAL]Starting model {i + 1}/{total_models}")
                 print("[GENERAL] Testing", config)
+                memory_used = 0 if not torch.cuda.is_available() else torch.cuda.memory_allocated()
+                print(f"[MEMORY] The memory alloocated in GPU is {memory_used}")
             args["config"] = (config, external_config)
             # Instantiate model with the configuration specified
             model_instance = model_class(**config)
 
             accuracy_stats, loss_stats = train(model_instance, args)
+            # Explicitly free the memory of the model
+            del model_instance
+            gc.collect()
+            # Synchronize with code in cuda
+            if torch.cuda.is_available():
+                torch.cuda.synchronize()
+
 
             # Save the accuracy and loss statistics
             saveMetrics(accuracy_stats, file_name + "_accuracies", results_path, args)
@@ -207,7 +219,7 @@ def train(model, args):
         accuracy_stats["val"].append(val_epoch_acc / len(dataloader_test))
 
         # print message every certain epoch
-        if e % (epochs / 10) == 0:
+        if e % (epochs // args["frequency_validation"]) == 0:
             tqdm.write(
                 f'Epoch {e + 0:03}: | Train Loss: {train_epoch_loss / len(dataloader_train):.5f}\
                 | Train Acc: {train_epoch_acc / len(dataloader_train):.3f}\
@@ -221,7 +233,9 @@ def instantiateModels(args):
     # Dictionary with available models for temporal aggregation
     models = {"AvgPooling": NeuralNetAvgPooling,
               "TRN": TRNmodule.RelationModuleMultiScaleWithClassifier,
-              "MultiAttention": MultiHeadAttentionClassifier}
+              "MultiAttention": MultiHeadAttentionClassifier,
+              "MultiAttentionDone" : EncoderLayer,
+              "MultiBaseLine" : AttentionBaseline}
     # Dictionary with the parameters to test in each model
 
     avg_pooling_parameters = {"dropout": [0, 0.25, 0.5], "hidden_sizes": [[512], [512, 64]]}
@@ -230,16 +244,27 @@ def instantiateModels(args):
     trn_parameters = {"dropout": [0.6, 0.1, 0.2, 0.7], "img_feature_dim": [2048], "num_frames": [5], "num_class": [8]}
     trn_external = {"early": [True, False], "weight_decay": [0, 1e-5, 1e-6]}
 
-    multi_parameters = {"attention_heads": [1], "dropout": [0.2],"hidden_sizes": [[512]]}
-    multi_external = trn_external
+    multi_parameters = {"attention_heads": [1,2], "dropout": [0.1,0.5],"hidden_sizes": [[512],[512,1024]],"encoder_layers" : [1,2],
+                        "key_size" : [512,1024,2048]}
+    multi_external = {"early": [False], "weight_decay": [1e-6,0, 1e-5]}
+
+    multi_done_parameters = {"d_model":[2048], "d_inner":[512], "n_head" : [3], "d_k" : [512], "d_v":[512]}
+    multi_done_external = multi_external
+
+    multi_baseline_parameters = {"dropout" : [0.1,0.3,0.5] ,"number_heads" : [1,2,3],"hidden_sizes" : [[512],[1024],[1024,512]]}
+    multi_baseline_external = multi_external
     # Define dictionaries
     parameters = {"AvgPooling": avg_pooling_parameters,
                   "TRN": trn_parameters,
-                  "MultiAttention": multi_parameters}
+                  "MultiAttention": multi_parameters,
+              "MultiAttentionDone" : multi_done_parameters,
+                  "MultiBaseLine" : multi_baseline_parameters}
 
     external = {"AvgPooling": avg_pooling_external,
                 "TRN": trn_external,
-                "MultiAttention":multi_external}
+                "MultiAttention":multi_external,
+              "MultiAttentionDone" : multi_done_external,
+                "MultiBaseLine" : multi_baseline_external}
 
     return models[aggregator], parameters[aggregator], external[aggregator]
 

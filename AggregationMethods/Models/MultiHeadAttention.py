@@ -1,3 +1,7 @@
+"""
+Module containing classes for the self-attention and transformer mechanism.
+"""
+
 from collections import OrderedDict
 
 from torch import nn
@@ -7,20 +11,29 @@ import numpy as np
 
 
 class MultiHeadAttentionClassifier(nn.Module):
-    def __init__(self, input_size=2048, output_size=8, hidden_sizes=None, encoder_layers=2, attention_heads=3,
-                 forward_hidden_size=512, dropout=0.2, mode="all", num_frames=5):
+    r""" Classifier built on top of an encoder like the one described in the paper Attention is all you need.
+
+    """
+
+    def __init__(self, input_size=2048, output_size=8, hidden_sizes=None, encoder_layers=1, attention_heads=1,
+                 forward_hidden_size=512, dropout=0.2, mode="all", num_frames=5, add_positional=False,key_size=512):
         super(MultiHeadAttentionClassifier, self).__init__()
         self.mode = mode
-        self.squeezing_methods = {"all": self._useAll}
+        self.squeezing_methods = {"all": self._useAll , "avg" : self._avgSqueezing}
+        self.positional_encoder = PositionalEncoder(input_dimension=input_size, maximum_length=6, add=add_positional)
         self.encoder = Encoder(input_size=input_size,
                                number_layers=encoder_layers,
                                number_heads=attention_heads,
                                hidden_size=forward_hidden_size,
-                               dropout=dropout)
+                               dropout=dropout,
+                               key_size=key_size)
         self.final_attention = MultiHeadAttentionModule(input_size=input_size,
                                                         number_heads=attention_heads,
                                                         dropout=dropout)
         input_size = (input_size * num_frames) if mode == "all" else input_size
+
+        self.average = nn.AvgPool1d(5)
+
         if hidden_sizes is None:
             hidden_sizes = [512, 256, 128, 64]
         self.sizes = [input_size] + hidden_sizes + [output_size]
@@ -32,11 +45,13 @@ class MultiHeadAttentionClassifier(nn.Module):
 
     def forward(self, x):
 
+        # Add positional encoding
+        x = self.positional_encoder(x)
         # Encode the input and use a final attention layer
         x = self.encoder(x)
         x = self.final_attention(x)
 
-        # Use feed forward network to produce logits
+        # Use feed forward network to produce the logits
         x = self._squeeze(x)
         x = self._feedForward(x)
 
@@ -48,6 +63,12 @@ class MultiHeadAttentionClassifier(nn.Module):
     def _useAll(self, x: torch.Tensor):
         batch_size: int = x.size(0)
         return x.view(batch_size, -1)
+
+    def _avgSqueezing(self, x: torch.Tensor):
+        batch_size: int = x.size(0)
+        # (batch_size,number_of_inputs,input_size)
+        return torch.transpose(self.average(torch.transpose(x,-2,-1)),-2,-1)
+        # todo : finish this
 
     def _feedForward(self, x):
         layer: nn.Linear
@@ -65,14 +86,15 @@ class MultiHeadAttentionClassifier(nn.Module):
 
 
 class Encoder(nn.Module):
-    def __init__(self, input_size: int = 2048, number_layers=2, dropout: float = 0.3, number_heads=3, hidden_size=1024):
+    def __init__(self, input_size: int = 2048, number_layers=2, dropout: float = 0.3, number_heads=3, hidden_size=1024,
+                 key_size=512):
         super(Encoder, self).__init__()
         # Instantiate the attention layers. Stack them in a Module list.
         self.encoder_layers = nn.ModuleList(
             [MultiHeadAttentionModule(input_size=input_size,
                                       number_heads=number_heads,
                                       residual=True,
-                                      key_size=512,
+                                      key_size=key_size,
                                       value_size=512,
                                       dropout=dropout) for i in range(number_layers)]
 
@@ -179,7 +201,15 @@ class MultiHeadAttentionModule(nn.Module):
 
 
 class AttentionModule(nn.Module):
-    r""" Module for computing the attention mechanism
+    r""" Module for computing the attention mechanism. This module computes the attention matrix.
+
+    The computation is done as follows:
+    1 ) Matrix multiplication between query and key
+    2 ) Scalation factor
+    3 ) Softmax applied by rows
+
+    Args:
+        dot_product_type (str): It is the type of dot product we are doing.
 
     """
 
@@ -197,9 +227,8 @@ class AttentionModule(nn.Module):
             1) Matrix multiplication between key and query
             2) Softmax function applied to matrix rows
         Args:
-            query (torch.Tensor):
-            key (torch.Tensor):
-            value (torch.Tensor):
+            query (torch.Tensor): This is the query matrix. The admitted dimension is (batch_size,num_frames,num_heads,input_size)
+            key (torch.Tensor): This is the key matrix. The admitted dimension is (batch_size,num_frames,num_heads,input_size)
 
         Returns:
             attention (torch.Tensor) : Attention tensor
@@ -218,8 +247,8 @@ class AttentionModule(nn.Module):
 
         This is the original implementation of the scaled dot product used in the Attention is all you need paper.
         Args:
-            query: Query passed to vector. The admitted dimension is
-            key:
+            query (torch.Tensor) : Query passed to vector. The admitted dimension is
+            key (torch.Tensor) : Key passed to the vector. The admitted dimension is
 
         Returns:
             attention (torch.Tensor) : Tensor with the attention matrix. The dimension is
@@ -246,3 +275,54 @@ class EncoderFeedForwardNormalized(nn.Module):
         x = self.dropout(self.linear2(self.relu(self.linear1(x)))) + x
         x = self.normalizator(x)
         return x
+
+
+class PositionalEncoder(nn.Module):
+    def __init__(self, input_dimension: int, maximum_length: int = 20, add=True):
+        super(PositionalEncoder, self).__init__()
+
+        # todo : change this parameter dynamically when is necessary
+        # todo : It specifies the maximum number
+        self.maximum_length: int = maximum_length
+        self.input_dimension = input_dimension
+
+        if add:
+            self.matrix = self._buildMatrix()
+        else:
+            # In case it is deactivated put a zero matrix
+            self.matrix = torch.zeros((self.maximum_length, self.input_dimension))
+
+        if torch.cuda.is_available():
+            self.matrix = self.matrix.cuda()
+
+    def _buildMatrix(self):
+
+        # Get numerator
+        position_vector: torch.Tensor = torch.arange(0, self.maximum_length, 1)
+
+        # Get Divisor
+        input_index: torch.Tensor = torch.arange(0, self.input_dimension, 1) * 2 / self.input_dimension
+        input_index = torch.pow(1000, input_index)
+        input_index = input_index.pow(-1)
+
+        position_vector = position_vector.view(self.maximum_length, 1).float()
+        input_index = input_index.view(1, self.input_dimension).float()
+        matrix = torch.matmul(position_vector, input_index)
+
+        matrix[0::2] = torch.sin(matrix[0::2])
+        matrix[1::2] = torch.cos(matrix[1::2])
+        return matrix
+
+    def forward(self, x):
+        number_records = x.size(-2)
+        input_size = x.size(-1)
+        return x + self.matrix[0:number_records, 0:input_size]
+
+
+if __name__ == '__main__':
+    instance = PositionalEncoder(input_dimension=10, maximum_length=5)
+    print(instance.matrix)
+
+    test = torch.zeros((5, 10))
+    result = instance(test)
+    print(result)
