@@ -89,7 +89,7 @@ def getFileName(args=None) -> str:
 
     dt_string = getTimestamp()
 
-    return dt_string + '_' + model_name + '_' + args["model"] + '_' + args["modality"]
+    return dt_string + '_' + model_name + '_' + args["model"] + '_' + args["modality"] + '_' + args["shift"]
 
 
 def getFolderName(args):
