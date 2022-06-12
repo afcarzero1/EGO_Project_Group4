@@ -10,6 +10,124 @@ import torch
 import numpy as np
 
 
+
+class MultiHeadAttentionClassifierPyTorch(nn.Module):
+    r""" Classifier built on top of an encoder like the one described in the paper Attention is all you need. This class
+    is based on the PyTorch module TransformerEncoderLayer.
+
+    Args:
+
+
+    """
+
+    def __init__(self, input_size=2048, output_size=8, hidden_sizes=None, encoder_layers=1, attention_heads=1,
+                 forward_hidden_size=512, dropout=0.2, mode="all", num_frames=5, add_positional=False,key_size=512):
+        super(MultiHeadAttentionClassifierPyTorch, self).__init__()
+        self.mode = mode
+        self.squeezing_methods = dict(all=self._useAll, avg=self._avgSqueezing)
+        self.positional_encoder = PositionalEncoder(input_dimension=input_size, maximum_length=6, add=add_positional)
+
+        self.encoder_layer = torch.nn.TransformerEncoderLayer(d_model=input_size,
+                                                        nhead=attention_heads,
+                                                        dim_feedforward=forward_hidden_size)
+        self.encoder = torch.nn.TransformerEncoder(encoder_layer=self.encoder_layer,
+                                                   num_layers=encoder_layers)
+
+
+        self.final_attention = MultiHeadAttentionModule(input_size=input_size,
+                                                        number_heads=attention_heads,
+                                                        dropout=dropout)
+        input_size = (input_size * num_frames) if mode == "all" else input_size
+
+        self.average = nn.AvgPool1d(5)
+
+        if hidden_sizes is None:
+            hidden_sizes = [512, 256, 128, 64]
+        self.sizes = [input_size] + hidden_sizes + [output_size]
+        self.layers = nn.ModuleList()
+        for index in range(len(self.sizes) - 1):
+            self.layers.append(nn.Linear(self.sizes[index], self.sizes[index + 1]))
+        self.relu1 = nn.ReLU()
+        self.dropout = nn.Dropout(p=dropout)
+
+    def forward(self, x):
+        r"""Apply the model to the input
+        Args:
+            x (torch.Tensor): Tensor on which to apply the model. The accepted dimension is (batch_size,num_segments,input_dimension)
+
+        Returns:
+            y (torch.tensor) : Tensor with classifications
+        """
+
+        # Add positional encoding. Dimension stays the same (batch_size,num_segments,input_dimension)
+        x = self.positional_encoder(x)
+        # Encode the input using the transformer. In this implementation we use the PyTorch module
+        # TransformerEncoderLayer. It is equivalent to use ony one encoder. We have dimension stays the
+        # same
+        x = self.encoder(x)
+        #x = self.final_attention(x)
+
+        # Use feed forward network to produce the logits
+        # We have the squeeze method that chooses how many of the output features are passed to the feed forward network.
+        x = self._squeeze(x)
+
+        # Call feed forward network to make predictions. The dimension is (batch_size,output_size)
+        x = self._feedForward(x)
+
+        return x
+
+    def _squeeze(self, x: torch.Tensor):
+        r""" Private function for calling the configured squeezing method.
+
+        Args:
+            x (torch.Tensor) : It is the tensor on which to apply the squeezing. Usually this is the output of the encoder.
+
+        Returns:
+            y (torch.Tensor) : Squeezed tensor.
+        """
+        return self.squeezing_methods[self.mode](x)
+
+    def _useAll(self, x: torch.Tensor):
+        r""" Squeezing method for using all of the vectors. It just squeezes the ouput into a "single row".
+
+        Args:
+            x (torch.Tensor) : The tensor to squeeze.
+
+        Returns:
+
+        """
+        batch_size: int = x.size(0)
+        return x.view(batch_size, -1)
+
+    def _avgSqueezing(self, x: torch.Tensor):
+        batch_size: int = x.size(0)
+        # (batch_size,number_of_inputs,input_size)
+        return torch.transpose(self.average(torch.transpose(x,-2,-1)),-2,-1)
+        # todo : finish this
+
+    def _feedForward(self, x):
+        """
+        Feed forward network for prediction
+        Args:
+            x:
+
+        Returns:
+
+        """
+        layer: nn.Linear
+        for index, layer in enumerate(self.layers):
+            # Use layer
+            x = layer(x)
+            # Apply activation function to all layers except last one.
+            if index != (len(self.layers) - 1):
+                x = self.relu1(x)
+            # Drop-out only the hidden layers
+            if index != 0 and index != (len(self.layers) - 1):
+                x = self.dropout(x)
+
+        return x
+
+
 class MultiHeadAttentionClassifier(nn.Module):
     r""" Classifier built on top of an encoder like the one described in the paper Attention is all you need.
 
@@ -86,6 +204,9 @@ class MultiHeadAttentionClassifier(nn.Module):
 
 
 class Encoder(nn.Module):
+    r"""
+    Manual implementation of an encoder. Equivalent to the PyTorch TransformerEncoder.
+    """
     def __init__(self, input_size: int = 2048, number_layers=2, dropout: float = 0.3, number_heads=3, hidden_size=1024,
                  key_size=512):
         super(Encoder, self).__init__()
@@ -115,7 +236,7 @@ class Encoder(nn.Module):
 
 class MultiHeadAttentionModule(nn.Module):
     r"""This is a module implementing a slightly modified version of the multi-head attention layer described in the
-    paper Attention is all you need.
+    paper Attention is all you need. Equivalent to the PyTorch TransformerEncoderLayer
 
     Attributes:
 
@@ -201,7 +322,8 @@ class MultiHeadAttentionModule(nn.Module):
 
 
 class AttentionModule(nn.Module):
-    r""" Module for computing the attention mechanism. This module computes the attention matrix.
+    r""" Module for computing the attention mechanism. This module computes the attention matrix. This module does not
+    have (known) equivalentt module in PyTorch. It is used for computing the attention matrix.
 
     The computation is done as follows:
     1 ) Matrix multiplication between query and key
@@ -261,6 +383,9 @@ class AttentionModule(nn.Module):
 
 
 class EncoderFeedForwardNormalized(nn.Module):
+    r""" Class implementing the feed forward network used inside an encoder layer.
+
+    """
     def __init__(self, input_features=2048, hidden_size=1024, dropout=0.2):
         super(EncoderFeedForwardNormalized, self).__init__()
 
@@ -271,23 +396,37 @@ class EncoderFeedForwardNormalized(nn.Module):
         self.normalizator = nn.LayerNorm(input_features)
 
     def forward(self, x):
-        # Add residual and pass thorugh a simple feed forward network.
+        # Add residual and pass through a simple feed forward network.
         x = self.dropout(self.linear2(self.relu(self.linear1(x)))) + x
         x = self.normalizator(x)
         return x
 
 
 class PositionalEncoder(nn.Module):
+    r""" Module implementing the positional encoding layer in a network. This module uses the Fourier positional encoding
+    described in the paper Attention is All you Need.
+    Args:
+        matrix (torch.Tensor) : matrix containing the tensor to be add.
+
+    """
     def __init__(self, input_dimension: int, maximum_length: int = 20, add=True):
+        """
+        Initializer
+        Args:
+            input_dimension(int): It is the input dimension of the feature vector to which positional encoding must be added.
+            maximum_length(int): Maximum number of sequential feature vector expected. Now it is a hard limit. IN the future it will be used
+                ass suggestion
+            add(boolean): Used to indicate if the positional encoding is to be added.
+        """
         super(PositionalEncoder, self).__init__()
 
         # todo : change this parameter dynamically when is necessary
-        # todo : It specifies the maximum number
+        # todo : It specifies the maximum number of stacked segments acepted.
         self.maximum_length: int = maximum_length
-        self.input_dimension = input_dimension
+        self.input_dimension: int = input_dimension
 
         if add:
-            self.matrix = self._buildMatrix()
+            self.matrix : torch.Tensor= self._buildMatrix()
         else:
             # In case it is deactivated put a zero matrix
             self.matrix = torch.zeros((self.maximum_length, self.input_dimension))
@@ -296,6 +435,15 @@ class PositionalEncoder(nn.Module):
             self.matrix = self.matrix.cuda()
 
     def _buildMatrix(self):
+        r""" Private function for building the matrix with the absolute positional encodings.
+
+        This matrix is built for performance reasons, so it does not have to be re-computed each time the forward method
+        is invoked.
+
+        Returns:
+            matrix (torch.Tensor) : Matrix with the positional encoding for the specified dimensions
+
+        """
 
         # Get numerator
         position_vector: torch.Tensor = torch.arange(0, self.maximum_length, 1)
@@ -314,6 +462,19 @@ class PositionalEncoder(nn.Module):
         return matrix
 
     def forward(self, x):
+        r""" Add the positional encodings
+
+        Args:
+            x (torch.Tensor): It is the stacked feature vector. The accepted dimension is (batch_size,num_segments,input_dimension)
+                or (num_segments,input_size)
+
+        Returns:
+            x (torch.Tensor) : The passed vectors with the positional encoding added.
+
+        Warnings:
+            Check that the add parameter is set up to True from the initializer if the positional encoding are to be added.
+
+        """
         number_records = x.size(-2)
         input_size = x.size(-1)
         return x + self.matrix[0:number_records, 0:input_size]
